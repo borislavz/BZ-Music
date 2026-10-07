@@ -1,0 +1,4 @@
+## This file is machine-specific. Created by scripts/setup-new-machine.ps1
+## Typical Windows SDK path:
+# sdk.dir=C\:\\Users\\YOUR_USER\\AppData\\Local\\Android\\Sdk
+sdk.dir=C\:\\Users\\YOUR_USER\\AppData\\Local\\Android\\Sdk
