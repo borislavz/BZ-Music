@@ -1,0 +1,18 @@
+---
+description: How to restore BZ Music Version5 when the user asks
+alwaysApply: true
+---
+
+# Version5 restore point
+
+When the user says **Restore Version5** (or similar):
+
+1. Discard or set aside later edits and restore the tree to git tag `Version5` (commit on `master` / `Version5-branch`).
+2. Prefer non-destructive first: `git switch master` then `git reset --hard Version5` only after confirming there is no uncommitted work the user wants kept (or stash/commit it first).
+3. Do not continue applying post-Version5 feature work from chat history after a restore unless the user asks.
+
+Restore markers created 2026-10-07:
+
+- Annotated tag: `Version5`
+- Branch: `Version5-branch`
+- Initial commit message: `Initial commit: BZ Music Version5 snapshot.`
