@@ -12,6 +12,10 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.SpannableStringBuilder;
+import android.text.Spanned;
+import android.text.style.ForegroundColorSpan;
+import android.text.style.StyleSpan;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -37,6 +41,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class PlayerActivity extends AppCompatActivity implements MusicPlayer.Listener {
     public static final String EXTRA_TRACK_URI = "track_uri";
     public static final String EXTRA_ALREADY_QUEUED = "already_queued";
+    private static final int TAG_YEAR_COLOR = 0xFF2E7D32;
+    private static final int ONLINE_RELEASE_COLOR = 0xFF6A1B9A;
+    private static final int FILE_DATE_COLOR = 0xFFC62828;
 
     private TextView textTrackTitle;
     private TextView textTrackInfo;
@@ -47,6 +54,9 @@ public class PlayerActivity extends AppCompatActivity implements MusicPlayer.Lis
     private MaterialButton buttonPlayPause;
     private MaterialButton buttonNext;
     private MaterialButton buttonTogglePlaylist;
+    private MaterialButton buttonSortName;
+    private MaterialButton buttonSortAuthor;
+    private MaterialButton buttonSortDate;
     private SeekBar seekProgress;
     private View panelNowPlaying;
     private View panelPlaylist;
@@ -54,10 +64,16 @@ public class PlayerActivity extends AppCompatActivity implements MusicPlayer.Lis
 
     private PlaylistAdapter playlistAdapter;
     private boolean showingPlaylist;
+    private enum ActiveSort { NONE, NAME, AUTHOR, DATE }
+    private ActiveSort activeSort = ActiveSort.NONE;
+    private boolean nameAscending = true;
+    private boolean authorAscending = true;
+    private boolean dateNewest = true;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final ExecutorService artExecutor = Executors.newSingleThreadExecutor();
     private final AtomicInteger artRequestId = new AtomicInteger();
+    private final AtomicInteger enrichRequestId = new AtomicInteger();
     private boolean userSeeking;
     private final Runnable progressRunnable = new Runnable() {
         @Override
@@ -72,15 +88,10 @@ public class PlayerActivity extends AppCompatActivity implements MusicPlayer.Lis
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_player);
 
-        // No back arrow: Start is leftmost, List/File Info centered, Exit rightmost.
-        AppNavigation.bindAppBar(this, R.string.player_title, false, false, true);
+        // Start | About | List/Song info | Exit — equal width.
+        AppNavigation.bindAppBar(this, R.string.player_title, false, true, true);
         requestNotificationPermissionIfNeeded();
-        // Replace the "Now Playing" title with centered List / File Info toggle.
-        TextView titleView = findViewById(R.id.textToolbarTitle);
-        if (titleView != null) {
-            titleView.setVisibility(View.GONE);
-        }
-        buttonTogglePlaylist = findViewById(R.id.buttonAbout);
+        buttonTogglePlaylist = findViewById(R.id.buttonTogglePlaylist);
         if (buttonTogglePlaylist != null) {
             buttonTogglePlaylist.setVisibility(View.VISIBLE);
             buttonTogglePlaylist.setText(R.string.player_show_list);
@@ -99,6 +110,9 @@ public class PlayerActivity extends AppCompatActivity implements MusicPlayer.Lis
         panelNowPlaying = findViewById(R.id.panelNowPlaying);
         panelPlaylist = findViewById(R.id.panelPlaylist);
         listPlaylist = findViewById(R.id.listPlaylist);
+        buttonSortName = findViewById(R.id.buttonSortName);
+        buttonSortAuthor = findViewById(R.id.buttonSortAuthor);
+        buttonSortDate = findViewById(R.id.buttonSortDate);
 
         playlistAdapter = new PlaylistAdapter(this);
         listPlaylist.setAdapter(playlistAdapter);
@@ -108,6 +122,17 @@ public class PlayerActivity extends AppCompatActivity implements MusicPlayer.Lis
             }
             MusicPlayer.get().playAtQueueIndex(position);
         });
+
+        if (buttonSortName != null) {
+            buttonSortName.setOnClickListener(v -> onSortNameClicked());
+        }
+        if (buttonSortAuthor != null) {
+            buttonSortAuthor.setOnClickListener(v -> onSortAuthorClicked());
+        }
+        if (buttonSortDate != null) {
+            buttonSortDate.setOnClickListener(v -> onSortDateClicked());
+        }
+        updateSortButtonsUi();
 
         PlaybackControlsBinder.bind(this);
 
@@ -183,8 +208,78 @@ public class PlayerActivity extends AppCompatActivity implements MusicPlayer.Lis
     }
 
     void onQueueOrderChanged() {
+        if (PlaybackPrefs.isShuffleEnabled(this) && activeSort != ActiveSort.NONE) {
+            activeSort = ActiveSort.NONE;
+            nameAscending = true;
+            authorAscending = true;
+            dateNewest = true;
+            updateSortButtonsUi();
+        }
         refreshPlaylistUi(showingPlaylist);
         updateTransportButtons();
+    }
+
+    private void onSortNameClicked() {
+        PlaybackControlsBinder.turnShuffleOff(this);
+        if (activeSort != ActiveSort.NAME) {
+            activeSort = ActiveSort.NAME;
+            nameAscending = true;
+        } else {
+            nameAscending = !nameAscending;
+        }
+        MusicPlayer.get().sortQueueByName(nameAscending);
+        updateSortButtonsUi();
+        onQueueOrderChanged();
+    }
+
+    private void onSortAuthorClicked() {
+        PlaybackControlsBinder.turnShuffleOff(this);
+        if (activeSort != ActiveSort.AUTHOR) {
+            activeSort = ActiveSort.AUTHOR;
+            authorAscending = true;
+        } else {
+            authorAscending = !authorAscending;
+        }
+        MusicPlayer.get().sortQueueByAuthor(authorAscending);
+        updateSortButtonsUi();
+        onQueueOrderChanged();
+    }
+
+    private void onSortDateClicked() {
+        PlaybackControlsBinder.turnShuffleOff(this);
+        if (activeSort != ActiveSort.DATE) {
+            activeSort = ActiveSort.DATE;
+            dateNewest = true;
+        } else {
+            dateNewest = !dateNewest;
+        }
+        MusicPlayer.get().sortQueueByReleaseDate(dateNewest);
+        updateSortButtonsUi();
+        onQueueOrderChanged();
+    }
+
+    private void updateSortButtonsUi() {
+        if (buttonSortName != null) {
+            boolean nameActive = activeSort == ActiveSort.NAME;
+            buttonSortName.setChecked(nameActive);
+            buttonSortName.setText(nameActive && !nameAscending
+                    ? R.string.player_sort_name_za
+                    : R.string.player_sort_name_az);
+        }
+        if (buttonSortAuthor != null) {
+            boolean authorActive = activeSort == ActiveSort.AUTHOR;
+            buttonSortAuthor.setChecked(authorActive);
+            buttonSortAuthor.setText(authorActive && !authorAscending
+                    ? R.string.player_sort_author_za
+                    : R.string.player_sort_author_az);
+        }
+        if (buttonSortDate != null) {
+            boolean dateActive = activeSort == ActiveSort.DATE;
+            buttonSortDate.setChecked(dateActive);
+            buttonSortDate.setText(dateActive && !dateNewest
+                    ? R.string.player_sort_oldest
+                    : R.string.player_sort_newest);
+        }
     }
 
     private void setPlaylistVisible(boolean showList) {
@@ -205,6 +300,7 @@ public class PlayerActivity extends AppCompatActivity implements MusicPlayer.Lis
         List<PlayableTrack> queue = MusicPlayer.get().getQueueSnapshot();
         int currentIndex = MusicPlayer.get().getQueueIndex();
         playlistAdapter.setTracks(queue, currentIndex);
+        enrichReleaseDatesAsync(queue);
         if (buttonTogglePlaylist != null) {
             buttonTogglePlaylist.setEnabled(!queue.isEmpty());
         }
@@ -217,6 +313,103 @@ public class PlayerActivity extends AppCompatActivity implements MusicPlayer.Lis
         if (showingPlaylist && scrollToCurrent && currentIndex >= 0 && currentIndex < queue.size()) {
             listPlaylist.post(() -> listPlaylist.smoothScrollToPosition(currentIndex));
         }
+    }
+
+    /**
+     * Probe YEAR/DATE tags, then online album year, then leave Date Modified.
+     * Updates list (and re-applies Newest/Oldest) when values change.
+     */
+    private void enrichReleaseDatesAsync(List<PlayableTrack> tracks) {
+        if (tracks == null || tracks.isEmpty()) {
+            return;
+        }
+        boolean needsWork = false;
+        for (PlayableTrack track : tracks) {
+            if (track != null && (track.needsTagProbe() || track.needsOnlineYearLookup())) {
+                needsWork = true;
+                break;
+            }
+        }
+        if (!needsWork) {
+            return;
+        }
+        final int requestId = enrichRequestId.incrementAndGet();
+        final List<PlayableTrack> snapshot = new ArrayList<>(tracks);
+        artExecutor.execute(() -> {
+            boolean changed = false;
+            for (PlayableTrack track : snapshot) {
+                if (isFinishing() || requestId != enrichRequestId.get()) {
+                    return;
+                }
+                if (track == null) {
+                    continue;
+                }
+                String before = track.releaseDateDisplay();
+                if (track.needsTagProbe()) {
+                    TrackReleaseDate.TagRelease tag = TrackReleaseDate.readFromUri(
+                            PlayerActivity.this, track.uri, track.dateModifiedMillis);
+                    track.applyTagRelease(tag);
+                }
+                if (track.needsOnlineYearLookup()) {
+                    TrackReleaseDate.TagRelease online =
+                            OnlineAlbumArtLookup.findAlbumReleaseDate(
+                                    track.artist, track.album);
+                    track.applyOnlineRelease(online);
+                }
+                if (!before.equals(track.releaseDateDisplay())) {
+                    changed = true;
+                }
+            }
+            if (!changed || isFinishing() || requestId != enrichRequestId.get()) {
+                return;
+            }
+            handler.post(() -> {
+                if (isFinishing() || requestId != enrichRequestId.get()) {
+                    return;
+                }
+                if (activeSort == ActiveSort.DATE) {
+                    MusicPlayer.get().sortQueueByReleaseDate(dateNewest);
+                }
+                List<PlayableTrack> queue = MusicPlayer.get().getQueueSnapshot();
+                playlistAdapter.setTracks(queue, MusicPlayer.get().getQueueIndex());
+                PlayableTrack current = MusicPlayer.get().getCurrentTrack();
+                if (current != null && !showingPlaylist) {
+                    showMetadata(current);
+                }
+            });
+        });
+    }
+
+    private static int releaseDateColor(PlayableTrack track) {
+        if (track == null) {
+            return 0;
+        }
+        if (track.hasTaggedRelease()) {
+            return TAG_YEAR_COLOR;
+        }
+        if (track.isOnlineRelease()) {
+            return ONLINE_RELEASE_COLOR;
+        }
+        if (track.isDateModifiedFallback()) {
+            return FILE_DATE_COLOR;
+        }
+        return 0;
+    }
+
+    private String releaseDateLabel(PlayableTrack track) {
+        if (track != null && track.isDateModifiedFallback()) {
+            return getString(R.string.player_date_modified);
+        }
+        return getString(R.string.player_release_date);
+    }
+
+    private void appendReleaseInfo(SpannableStringBuilder info, PlayableTrack track,
+                                   String releaseDate) {
+        if (track == null) {
+            return;
+        }
+        appendInfo(info, releaseDateLabel(track), releaseDate, releaseDateColor(track),
+                track.isReleaseValueBold());
     }
 
     private void showMetadata(PlayableTrack track) {
@@ -233,7 +426,7 @@ public class PlayerActivity extends AppCompatActivity implements MusicPlayer.Lis
         String artist = known != null ? known.artist : null;
         String album = known != null ? known.album : null;
         String displayName = known != null ? known.displayName : null;
-        StringBuilder info = new StringBuilder();
+        SpannableStringBuilder info = new SpannableStringBuilder();
         Bitmap albumArt = null;
         MediaMetadataRetriever retriever = new MediaMetadataRetriever();
         try {
@@ -242,10 +435,8 @@ public class PlayerActivity extends AppCompatActivity implements MusicPlayer.Lis
             String metaArtist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST);
             String metaAlbum = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM);
             String genre = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE);
-            String year = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_YEAR);
             String bitrate = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE);
             String duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
-            String mime = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_MIMETYPE);
 
             if (metaTitle != null && !metaTitle.trim().isEmpty()) {
                 title = metaTitle.trim();
@@ -259,19 +450,36 @@ public class PlayerActivity extends AppCompatActivity implements MusicPlayer.Lis
             appendInfo(info, getString(R.string.player_artist), artist);
             appendInfo(info, getString(R.string.player_album), album);
             appendInfo(info, getString(R.string.player_genre), genre);
-            appendInfo(info, getString(R.string.player_year), year);
+
+            long dateModifiedMillis = known != null ? known.dateModifiedMillis : 0L;
+            TrackReleaseDate.TagRelease tag =
+                    TrackReleaseDate.readFromRetriever(retriever, dateModifiedMillis);
+            if (known != null) {
+                known.applyTagRelease(tag);
+            }
+            String releaseDate = known != null
+                    ? known.releaseDateDisplay()
+                    : TrackReleaseDate.displayValue(tag.millis, tag.yearOnly, dateModifiedMillis);
+            if (known != null) {
+                appendReleaseInfo(info, known, releaseDate);
+            } else {
+                boolean modifiedFallback = !tag.isPresent() && dateModifiedMillis > 0L;
+                appendInfo(info,
+                        getString(modifiedFallback
+                                ? R.string.player_date_modified
+                                : R.string.player_release_date),
+                        releaseDate,
+                        modifiedFallback ? FILE_DATE_COLOR
+                                : (tag.isPresent() ? TAG_YEAR_COLOR : 0),
+                        tag.isPresent());
+            }
+
             if (bitrate != null) {
                 try {
                     int kbps = Integer.parseInt(bitrate) / 1000;
-                    appendInfo(info, getString(R.string.player_bitrate), kbps + " kbps");
+                    appendInfo(info, getString(R.string.player_bitrate), kbps + " kbps", 0, false);
                 } catch (NumberFormatException ignored) {
                 }
-            }
-            if (mime != null && !mime.trim().isEmpty()) {
-                appendInfo(info, getString(R.string.player_format), mime.trim());
-            }
-            if (displayName != null) {
-                appendInfo(info, getString(R.string.player_file), displayName);
             }
             if (duration != null) {
                 try {
@@ -285,11 +493,11 @@ public class PlayerActivity extends AppCompatActivity implements MusicPlayer.Lis
                 albumArt = BitmapFactory.decodeByteArray(picture, 0, picture.length);
             }
         } catch (RuntimeException e) {
-            if (displayName != null) {
-                appendInfo(info, getString(R.string.player_file), displayName);
-            }
             appendInfo(info, getString(R.string.player_artist), artist);
             appendInfo(info, getString(R.string.player_album), album);
+            if (known != null) {
+                appendReleaseInfo(info, known, known.releaseDateDisplay());
+            }
         } finally {
             try {
                 retriever.release();
@@ -300,7 +508,7 @@ public class PlayerActivity extends AppCompatActivity implements MusicPlayer.Lis
         textTrackTitle.setText(title);
         textTrackInfo.setText(info.length() == 0
                 ? getString(R.string.player_no_metadata)
-                : info.toString().trim());
+                : info);
 
         final int requestId = artRequestId.incrementAndGet();
         if (albumArt != null) {
@@ -327,7 +535,12 @@ public class PlayerActivity extends AppCompatActivity implements MusicPlayer.Lis
         }
     }
 
-    private void appendInfo(StringBuilder builder, String label, String value) {
+    private void appendInfo(SpannableStringBuilder builder, String label, String value) {
+        appendInfo(builder, label, value, 0, false);
+    }
+
+    private void appendInfo(SpannableStringBuilder builder, String label, String value,
+                            int valueColor, boolean valueBold) {
         if (value == null) {
             return;
         }
@@ -338,7 +551,17 @@ public class PlayerActivity extends AppCompatActivity implements MusicPlayer.Lis
         if (builder.length() > 0) {
             builder.append('\n');
         }
-        builder.append(label).append(": ").append(trimmed);
+        builder.append(label).append(": ");
+        int valueStart = builder.length();
+        builder.append(trimmed);
+        if (valueColor != 0) {
+            builder.setSpan(new ForegroundColorSpan(valueColor), valueStart, builder.length(),
+                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        }
+        if (valueBold) {
+            builder.setSpan(new StyleSpan(Typeface.BOLD), valueStart, builder.length(),
+                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        }
     }
 
     private void requestNotificationPermissionIfNeeded() {
@@ -509,20 +732,88 @@ public class PlayerActivity extends AppCompatActivity implements MusicPlayer.Lis
             }
             PlayableTrack track = getItem(position);
             TextView titleView = view.findViewById(R.id.textPlaylistTitle);
-            TextView subtitleView = view.findViewById(R.id.textPlaylistSubtitle);
+            TextView artistView = view.findViewById(R.id.textPlaylistArtist);
+            View albumRow = view.findViewById(R.id.rowPlaylistAlbum);
+            TextView albumView = view.findViewById(R.id.textPlaylistAlbum);
+            TextView dateView = view.findViewById(R.id.textPlaylistReleaseDate);
             String title = track != null && track.title != null && !track.title.trim().isEmpty()
                     ? track.title.trim()
                     : (track != null ? track.displayName : "");
-            String artist = track != null && track.artist != null ? track.artist.trim() : "";
-            if (artist.isEmpty() || "<unknown>".equalsIgnoreCase(artist)) {
-                artist = track != null ? track.displayName : "";
-            }
             titleView.setText(title);
-            subtitleView.setText(artist);
+
+            String artist = usablePlaylistMeta(track != null ? track.artist : null);
+            if (!artist.isEmpty()) {
+                artistView.setVisibility(View.VISIBLE);
+                artistView.setText(getContext().getString(R.string.player_list_artist, artist));
+            } else {
+                artistView.setVisibility(View.GONE);
+                artistView.setText("");
+            }
+
+            String album = usablePlaylistMeta(track != null ? track.album : null);
+            String albumLine = "";
+            if (!album.isEmpty()) {
+                albumLine = getContext().getString(R.string.player_list_album, album);
+            } else {
+                String folder = folderLabel(track != null ? track.folderKey : null);
+                if (!folder.isEmpty()) {
+                    albumLine = getContext().getString(R.string.player_list_folder, folder);
+                }
+            }
+            String releaseDate = track != null ? track.releaseDateDisplay() : "";
+            if (!albumLine.isEmpty() || !releaseDate.isEmpty()) {
+                albumRow.setVisibility(View.VISIBLE);
+                albumView.setText(albumLine);
+                albumView.setVisibility(albumLine.isEmpty() ? View.GONE : View.VISIBLE);
+                if (!releaseDate.isEmpty()) {
+                    dateView.setVisibility(View.VISIBLE);
+                    dateView.setText(releaseDate);
+                    int dateColor = releaseDateColor(track);
+                    dateView.setTextColor(dateColor != 0 ? dateColor : 0xFF4A6267);
+                    dateView.setTypeface(null,
+                            track != null && track.isReleaseValueBold()
+                                    ? Typeface.BOLD : Typeface.NORMAL);
+                } else {
+                    dateView.setVisibility(View.GONE);
+                    dateView.setText("");
+                }
+            } else {
+                albumRow.setVisibility(View.GONE);
+                albumView.setText("");
+                dateView.setText("");
+            }
+
             boolean isCurrent = position == currentIndex;
             view.setBackgroundColor(isCurrent ? 0xFFB2DFDB : 0x00000000);
             titleView.setTypeface(null, isCurrent ? Typeface.BOLD : Typeface.NORMAL);
             return view;
+        }
+
+        private static String usablePlaylistMeta(String value) {
+            if (value == null) {
+                return "";
+            }
+            String trimmed = value.trim();
+            if (trimmed.isEmpty() || "<unknown>".equalsIgnoreCase(trimmed)
+                    || "unknown".equalsIgnoreCase(trimmed)) {
+                return "";
+            }
+            return trimmed;
+        }
+
+        private static String folderLabel(String folderKey) {
+            if (folderKey == null) {
+                return "";
+            }
+            String key = folderKey.trim();
+            if (key.isEmpty()) {
+                return "";
+            }
+            int slash = key.lastIndexOf('/');
+            if (slash >= 0 && slash < key.length() - 1) {
+                return key.substring(slash + 1);
+            }
+            return key;
         }
     }
 }

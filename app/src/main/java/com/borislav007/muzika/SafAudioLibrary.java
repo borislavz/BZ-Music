@@ -109,7 +109,9 @@ final class SafAudioLibrary {
                 if (uri == null) {
                     continue;
                 }
-                out.add(new PlayableTrack(uri, name, name, null, null, relativeKey(root, dir)));
+                long dateModifiedMillis = child.lastModified();
+                out.add(new PlayableTrack(uri, name, name, null, null,
+                        relativeKey(root, dir), 0, dateModifiedMillis));
             }
         }
     }

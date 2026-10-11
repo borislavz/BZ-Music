@@ -110,6 +110,108 @@ final class MusicPlayer {
         playCurrent();
     }
 
+    /** Sort the play queue by filename; keeps the current track as current. */
+    void sortQueueByName(boolean ascending) {
+        if (playQueue.isEmpty()) {
+            return;
+        }
+        PlayableTrack keep = currentTrack;
+        final int dir = ascending ? 1 : -1;
+        Collections.sort(playQueue, (a, b) -> dir * compareText(a.displayName, b.displayName));
+        queueIndex = keep != null ? indexOfTrack(playQueue, keep) : 0;
+        if (queueIndex < 0) {
+            queueIndex = 0;
+        }
+    }
+
+    /**
+     * Sort the play queue by artist; if artist is missing, use album.
+     * Keeps the current track as current.
+     */
+    void sortQueueByAuthor(boolean ascending) {
+        if (playQueue.isEmpty()) {
+            return;
+        }
+        PlayableTrack keep = currentTrack;
+        final int dir = ascending ? 1 : -1;
+        Collections.sort(playQueue, (a, b) -> {
+            int byKey = dir * compareText(artistOrAlbumKey(a), artistOrAlbumKey(b));
+            if (byKey != 0) {
+                return byKey;
+            }
+            return dir * compareText(a.displayName, b.displayName);
+        });
+        queueIndex = keep != null ? indexOfTrack(playQueue, keep) : 0;
+        if (queueIndex < 0) {
+            queueIndex = 0;
+        }
+    }
+
+    /**
+     * Sort by release year/TYER, else file date. {@code newestFirst} true = Newest.
+     * Keeps the current track as current.
+     */
+    void sortQueueByReleaseDate(boolean newestFirst) {
+        if (playQueue.isEmpty()) {
+            return;
+        }
+        PlayableTrack keep = currentTrack;
+        final int dir = newestFirst ? -1 : 1;
+        Collections.sort(playQueue, (a, b) -> {
+            long keyA = a != null ? a.releaseSortKey() : 0L;
+            long keyB = b != null ? b.releaseSortKey() : 0L;
+            int byDate = Long.compare(keyA, keyB);
+            if (byDate != 0) {
+                return dir * byDate;
+            }
+            return compareText(
+                    a != null ? a.displayName : "",
+                    b != null ? b.displayName : "");
+        });
+        queueIndex = keep != null ? indexOfTrack(playQueue, keep) : 0;
+        if (queueIndex < 0) {
+            queueIndex = 0;
+        }
+    }
+
+    private static String artistOrAlbumKey(PlayableTrack track) {
+        if (track == null) {
+            return "";
+        }
+        String artist = usableMeta(track.artist);
+        if (!artist.isEmpty()) {
+            return artist;
+        }
+        return usableMeta(track.album);
+    }
+
+    private static String usableMeta(String value) {
+        if (value == null) {
+            return "";
+        }
+        String trimmed = value.trim();
+        if (trimmed.isEmpty() || "<unknown>".equalsIgnoreCase(trimmed)
+                || "unknown".equalsIgnoreCase(trimmed)) {
+            return "";
+        }
+        return trimmed;
+    }
+
+    private static int compareText(String left, String right) {
+        String a = left != null ? left.trim() : "";
+        String b = right != null ? right.trim() : "";
+        if (a.isEmpty() && b.isEmpty()) {
+            return 0;
+        }
+        if (a.isEmpty()) {
+            return 1;
+        }
+        if (b.isEmpty()) {
+            return -1;
+        }
+        return a.compareToIgnoreCase(b);
+    }
+
     PlaybackMediaSession mediaSessionOrNull() {
         return mediaSession;
     }

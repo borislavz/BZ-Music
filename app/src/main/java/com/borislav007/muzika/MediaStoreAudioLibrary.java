@@ -58,6 +58,8 @@ final class MediaStoreAudioLibrary {
                     MediaStore.Audio.Media.TITLE,
                     MediaStore.Audio.Media.ARTIST,
                     MediaStore.Audio.Media.ALBUM,
+                    MediaStore.Audio.Media.YEAR,
+                    MediaStore.Audio.Media.DATE_MODIFIED,
                     MediaStore.Audio.Media.RELATIVE_PATH,
                     MediaStore.Audio.Media.MIME_TYPE
             };
@@ -68,6 +70,8 @@ final class MediaStoreAudioLibrary {
                     MediaStore.Audio.Media.TITLE,
                     MediaStore.Audio.Media.ARTIST,
                     MediaStore.Audio.Media.ALBUM,
+                    MediaStore.Audio.Media.YEAR,
+                    MediaStore.Audio.Media.DATE_MODIFIED,
                     MediaStore.Audio.Media.DATA,
                     MediaStore.Audio.Media.MIME_TYPE
             };
@@ -85,6 +89,8 @@ final class MediaStoreAudioLibrary {
             int titleCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE);
             int artistCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST);
             int albumCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM);
+            int yearCol = cursor.getColumnIndex(MediaStore.Audio.Media.YEAR);
+            int modifiedCol = cursor.getColumnIndex(MediaStore.Audio.Media.DATE_MODIFIED);
             int mimeCol = cursor.getColumnIndex(MediaStore.Audio.Media.MIME_TYPE);
             int pathCol = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
                     ? cursor.getColumnIndex(MediaStore.Audio.Media.RELATIVE_PATH)
@@ -100,13 +106,20 @@ final class MediaStoreAudioLibrary {
                 String title = cursor.getString(titleCol);
                 String artist = cursor.getString(artistCol);
                 String album = cursor.getString(albumCol);
+                int releaseYear = yearCol >= 0 && !cursor.isNull(yearCol)
+                        ? cursor.getInt(yearCol) : 0;
+                if (releaseYear < 1000 || releaseYear > 2100) {
+                    releaseYear = 0;
+                }
+                long dateModifiedMillis = dateModifiedMillisFromCursor(cursor, modifiedCol);
                 String folderKey = "";
                 if (pathCol >= 0) {
                     folderKey = toFolderKey(cursor.getString(pathCol),
                             Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q);
                 }
                 Uri contentUri = ContentUris.withAppendedId(collection, id);
-                tracks.add(new PlayableTrack(contentUri, displayName, title, artist, album, folderKey));
+                tracks.add(new PlayableTrack(contentUri, displayName, title, artist, album,
+                        folderKey, releaseYear, dateModifiedMillis));
             }
         } catch (SecurityException ignored) {
             // Permission not granted yet.
@@ -148,6 +161,7 @@ final class MediaStoreAudioLibrary {
                         MediaStore.Files.FileColumns._ID,
                         MediaStore.Files.FileColumns.DISPLAY_NAME,
                         MediaStore.Files.FileColumns.TITLE,
+                        MediaStore.Files.FileColumns.DATE_MODIFIED,
                         MediaStore.Files.FileColumns.RELATIVE_PATH,
                         MediaStore.Files.FileColumns.MIME_TYPE
                 };
@@ -156,6 +170,7 @@ final class MediaStoreAudioLibrary {
                         MediaStore.Files.FileColumns._ID,
                         MediaStore.Files.FileColumns.DISPLAY_NAME,
                         MediaStore.Files.FileColumns.TITLE,
+                        MediaStore.Files.FileColumns.DATE_MODIFIED,
                         MediaStore.Files.FileColumns.DATA,
                         MediaStore.Files.FileColumns.MIME_TYPE
                 };
@@ -169,6 +184,7 @@ final class MediaStoreAudioLibrary {
                 int idCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID);
                 int nameCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DISPLAY_NAME);
                 int titleCol = cursor.getColumnIndex(MediaStore.Files.FileColumns.TITLE);
+                int modifiedCol = cursor.getColumnIndex(MediaStore.Files.FileColumns.DATE_MODIFIED);
                 int pathCol = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
                         ? cursor.getColumnIndex(MediaStore.Files.FileColumns.RELATIVE_PATH)
                         : cursor.getColumnIndex(MediaStore.Files.FileColumns.DATA);
@@ -188,8 +204,10 @@ final class MediaStoreAudioLibrary {
                     }
                     long id = cursor.getLong(idCol);
                     String title = titleCol >= 0 ? cursor.getString(titleCol) : displayName;
+                    long dateModifiedMillis = dateModifiedMillisFromCursor(cursor, modifiedCol);
                     Uri contentUri = ContentUris.withAppendedId(collection, id);
-                    tracks.add(new PlayableTrack(contentUri, displayName, title, null, null, folderKey));
+                    tracks.add(new PlayableTrack(contentUri, displayName, title, null, null,
+                            folderKey, 0, dateModifiedMillis));
                 }
             } catch (SecurityException | IllegalArgumentException ignored) {
                 // Files table may be restricted on some Android versions.
@@ -201,6 +219,15 @@ final class MediaStoreAudioLibrary {
         return (folderKey != null ? folderKey : "").toLowerCase(Locale.US)
                 + "\0"
                 + (displayName != null ? displayName : "").toLowerCase(Locale.US);
+    }
+
+    /** MediaStore DATE_MODIFIED is stored in seconds. */
+    private static long dateModifiedMillisFromCursor(Cursor cursor, int modifiedCol) {
+        if (modifiedCol < 0 || cursor.isNull(modifiedCol)) {
+            return 0L;
+        }
+        long seconds = cursor.getLong(modifiedCol);
+        return seconds > 0L ? seconds * 1000L : 0L;
     }
 
     static List<String> childFolders(List<PlayableTrack> all, String currentFolderKey) {

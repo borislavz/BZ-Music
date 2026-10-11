@@ -11,9 +11,12 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -29,8 +32,57 @@ final class OnlineAlbumArtLookup {
             Pattern.compile("^\\s*\\d{1,3}\\s*[.\\-_)]+\\s*");
     private static final Pattern ARTIST_TITLE_SPLIT =
             Pattern.compile("\\s+[\\-–—]\\s+|\\s+_\\s+|\\s{2,}");
+    private static final Map<String, TrackReleaseDate.TagRelease> ALBUM_RELEASE_CACHE =
+            Collections.synchronizedMap(
+                    new LinkedHashMap<String, TrackReleaseDate.TagRelease>(64, 0.75f, true) {
+                        @Override
+                        protected boolean removeEldestEntry(
+                                Map.Entry<String, TrackReleaseDate.TagRelease> eldest) {
+                            return size() > 128;
+                        }
+                    });
 
     private OnlineAlbumArtLookup() {
+    }
+
+    static boolean hasUsableAlbum(String album) {
+        return !TextUtils.isEmpty(cleanMeta(album));
+    }
+
+    /**
+     * Looks up an album release date online (iTunes, then Deezer).
+     * Returns full date when month/day are present, otherwise year-only.
+     */
+    static TrackReleaseDate.TagRelease findAlbumReleaseDate(String artist, String album) {
+        String cleanAlbum = cleanMeta(album);
+        if (TextUtils.isEmpty(cleanAlbum)) {
+            return TrackReleaseDate.TagRelease.NONE;
+        }
+        String cleanArtist = cleanMeta(artist);
+        String cacheKey = ((cleanArtist != null ? cleanArtist : "") + "\0" + cleanAlbum)
+                .toLowerCase(Locale.US);
+        TrackReleaseDate.TagRelease cached = ALBUM_RELEASE_CACHE.get(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
+
+        TrackReleaseDate.TagRelease found = TrackReleaseDate.TagRelease.NONE;
+        Set<String> querySet = new LinkedHashSet<>();
+        addQuery(querySet, cleanArtist, cleanAlbum, null);
+        addQuery(querySet, cleanAlbum, null, null);
+        addQuery(querySet, stripExtras(cleanAlbum), null, null);
+        for (String query : querySet) {
+            found = searchItunesAlbumRelease(query, cleanAlbum, cleanArtist);
+            if (found.isPresent()) {
+                break;
+            }
+            found = searchDeezerAlbumRelease(query, cleanAlbum, cleanArtist);
+            if (found.isPresent()) {
+                break;
+            }
+        }
+        ALBUM_RELEASE_CACHE.put(cacheKey, found);
+        return found;
     }
 
     static Bitmap findCover(String artist, String album, String title) {
@@ -216,6 +268,118 @@ final class OnlineAlbumArtLookup {
                 .replaceAll("\\s+", " ")
                 .trim();
         return cleanMeta(cleaned);
+    }
+
+    private static TrackReleaseDate.TagRelease searchItunesAlbumRelease(
+            String query, String album, String artist) {
+        HttpURLConnection connection = null;
+        try {
+            Uri uri = Uri.parse("https://itunes.apple.com/search").buildUpon()
+                    .appendQueryParameter("term", query)
+                    .appendQueryParameter("media", "music")
+                    .appendQueryParameter("entity", "album")
+                    .appendQueryParameter("limit", "8")
+                    .build();
+            connection = openGet(uri.toString());
+            if (connection.getResponseCode() != HttpURLConnection.HTTP_OK) {
+                return TrackReleaseDate.TagRelease.NONE;
+            }
+            JSONObject root = new JSONObject(readFully(connection.getInputStream()));
+            JSONArray results = root.optJSONArray("results");
+            if (results == null) {
+                return TrackReleaseDate.TagRelease.NONE;
+            }
+            String albumLower = album != null ? album.toLowerCase(Locale.US) : "";
+            String artistLower = artist != null ? artist.toLowerCase(Locale.US) : "";
+            TrackReleaseDate.TagRelease bestAny = TrackReleaseDate.TagRelease.NONE;
+            TrackReleaseDate.TagRelease bestMatch = TrackReleaseDate.TagRelease.NONE;
+            for (int i = 0; i < results.length(); i++) {
+                JSONObject item = results.optJSONObject(i);
+                if (item == null) {
+                    continue;
+                }
+                TrackReleaseDate.TagRelease release =
+                        TrackReleaseDate.parseTagDate(item.optString("releaseDate", null));
+                if (!release.isPresent()) {
+                    continue;
+                }
+                if (!bestAny.isPresent()) {
+                    bestAny = release;
+                }
+                String collection = item.optString("collectionName", "").toLowerCase(Locale.US);
+                String artistName = item.optString("artistName", "").toLowerCase(Locale.US);
+                boolean albumHit = !albumLower.isEmpty() && collection.contains(albumLower);
+                boolean artistHit = artistLower.isEmpty() || artistName.contains(artistLower)
+                        || tokensOverlap(artistLower, artistName);
+                if (albumHit && artistHit) {
+                    bestMatch = release;
+                    break;
+                }
+            }
+            return bestMatch.isPresent() ? bestMatch : bestAny;
+        } catch (Exception ignored) {
+            return TrackReleaseDate.TagRelease.NONE;
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
+    }
+
+    private static TrackReleaseDate.TagRelease searchDeezerAlbumRelease(
+            String query, String album, String artist) {
+        HttpURLConnection connection = null;
+        try {
+            Uri uri = Uri.parse("https://api.deezer.com/search/album").buildUpon()
+                    .appendQueryParameter("q", query)
+                    .appendQueryParameter("limit", "8")
+                    .build();
+            connection = openGet(uri.toString());
+            if (connection.getResponseCode() != HttpURLConnection.HTTP_OK) {
+                return TrackReleaseDate.TagRelease.NONE;
+            }
+            JSONObject root = new JSONObject(readFully(connection.getInputStream()));
+            JSONArray results = root.optJSONArray("data");
+            if (results == null) {
+                return TrackReleaseDate.TagRelease.NONE;
+            }
+            String albumLower = album != null ? album.toLowerCase(Locale.US) : "";
+            String artistLower = artist != null ? artist.toLowerCase(Locale.US) : "";
+            TrackReleaseDate.TagRelease bestAny = TrackReleaseDate.TagRelease.NONE;
+            TrackReleaseDate.TagRelease bestMatch = TrackReleaseDate.TagRelease.NONE;
+            for (int i = 0; i < results.length(); i++) {
+                JSONObject item = results.optJSONObject(i);
+                if (item == null) {
+                    continue;
+                }
+                TrackReleaseDate.TagRelease release =
+                        TrackReleaseDate.parseTagDate(item.optString("release_date", null));
+                if (!release.isPresent()) {
+                    continue;
+                }
+                if (!bestAny.isPresent()) {
+                    bestAny = release;
+                }
+                String title = item.optString("title", "").toLowerCase(Locale.US);
+                JSONObject artistObj = item.optJSONObject("artist");
+                String artistName = artistObj != null
+                        ? artistObj.optString("name", "").toLowerCase(Locale.US) : "";
+                boolean albumHit = !albumLower.isEmpty() && title.contains(albumLower);
+                boolean artistHit = artistLower.isEmpty() || artistName.contains(artistLower)
+                        || tokensOverlap(artistLower, artistName);
+                if (albumHit && artistHit) {
+                    bestMatch = release;
+                    break;
+                }
+            }
+            return bestMatch.isPresent() ? bestMatch : bestAny;
+        } catch (Exception ignored) {
+            return TrackReleaseDate.TagRelease.NONE;
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
     }
 
     private static String searchItunesArtwork(String query, String entity) {

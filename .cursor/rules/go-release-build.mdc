@@ -1,0 +1,12 @@
+---
+description: When the user types go, build release APK and AAB
+alwaysApply: true
+---
+
+# Release build shortcut
+
+When the user message is **go** (or clearly means that shortcut):
+
+1. Run a signed release build: `:app:assembleRelease` and `:app:bundleRelease`
+2. Do **not** bump `versionCode` / `versionName` unless they also ask to increment the version
+3. Report the output paths for `app-release.apk` and `app-release.aab` when done

@@ -45,6 +45,8 @@ New-Item -ItemType Directory -Path $stage | Out-Null
 
 $includeDirs = @("app", "gradle", "play-store", "scripts", "test-audio")
 if ($IncludeMavenCache) { $includeDirs += "local-maven-repo" }
+# Cursor project rules (go / Version5 restore) — small, useful if using Cursor on the new PC
+if (Test-Path (Join-Path $Root ".cursor\rules")) { $includeDirs += ".cursor" }
 
 $includeFiles = @(
     "gradlew", "gradlew.bat", "build.gradle.kts", "settings.gradle.kts", "gradle.properties",

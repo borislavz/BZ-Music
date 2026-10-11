@@ -1,107 +1,140 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/appBar"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:background="#006874"
-    android:minHeight="?attr/actionBarSize"
+    android:gravity="center_vertical"
+    android:minHeight="40dp"
+    android:orientation="horizontal"
     android:paddingStart="4dp"
-    android:paddingTop="6dp"
+    android:paddingTop="3dp"
     android:paddingEnd="4dp"
-    android:paddingBottom="6dp">
+    android:paddingBottom="3dp">
 
-    <!-- Left: Back + Start (or title on screens without Start) -->
-    <LinearLayout
+    <ImageButton
+        android:id="@+id/buttonToolbarBack"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/folder_up"
+        android:padding="8dp"
+        android:scaleType="centerInside"
+        android:src="@drawable/ic_toolbar_back"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/textToolbarTitle"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="4dp"
+        android:layout_marginEnd="4dp"
+        android:layout_weight="1"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="@android:color/white"
+        android:textSize="15sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/buttonMainMenu"
+        style="@style/Widget.Material3.Button.OutlinedButton"
         android:layout_width="wrap_content"
-        android:layout_height="match_parent"
-        android:layout_gravity="start|center_vertical"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
+        android:layout_height="wrap_content"
+        android:insetTop="0dp"
+        android:insetBottom="0dp"
+        android:minHeight="34dp"
+        android:minWidth="0dp"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:text="@string/action_main_menu"
+        android:textAllCaps="false"
+        android:textColor="@android:color/white"
+        android:textSize="12sp"
+        android:visibility="gone"
+        app:backgroundTint="#00838F"
+        app:cornerRadius="6dp"
+        app:strokeColor="@android:color/white"
+        app:strokeWidth="1dp" />
 
-        <ImageButton
-            android:id="@+id/buttonToolbarBack"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/folder_up"
-            android:padding="12dp"
-            android:scaleType="centerInside"
-            android:src="@drawable/ic_toolbar_back"
-            android:visibility="gone" />
+    <Space
+        android:id="@+id/barSpacerLeft"
+        android:layout_width="0dp"
+        android:layout_height="1dp"
+        android:layout_weight="1"
+        android:visibility="gone" />
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/buttonMainMenu"
-            style="@style/Widget.Material3.Button.OutlinedButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:minHeight="40dp"
-            android:minWidth="0dp"
-            android:paddingStart="12dp"
-            android:paddingEnd="12dp"
-            android:text="@string/action_main_menu"
-            android:textAllCaps="false"
-            android:textColor="@android:color/white"
-            android:textSize="14sp"
-            android:visibility="gone"
-            app:backgroundTint="#00838F"
-            app:cornerRadius="8dp"
-            app:strokeColor="@android:color/white"
-            app:strokeWidth="1dp" />
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/buttonTogglePlaylist"
+        style="@style/Widget.Material3.Button.OutlinedButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:insetTop="0dp"
+        android:insetBottom="0dp"
+        android:minHeight="36dp"
+        android:minWidth="128dp"
+        android:paddingStart="18dp"
+        android:paddingEnd="18dp"
+        android:text="@string/player_show_list"
+        android:textAllCaps="false"
+        android:textColor="@android:color/white"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:visibility="gone"
+        app:backgroundTint="#00838F"
+        app:cornerRadius="6dp"
+        app:strokeColor="@android:color/white"
+        app:strokeWidth="1dp" />
 
-        <TextView
-            android:id="@+id/textToolbarTitle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:layout_marginEnd="4dp"
-            android:ellipsize="end"
-            android:maxWidth="160dp"
-            android:maxLines="1"
-            android:textColor="@android:color/white"
-            android:textSize="18sp"
-            android:textStyle="bold" />
-    </LinearLayout>
+    <Space
+        android:id="@+id/barSpacerRight"
+        android:layout_width="0dp"
+        android:layout_height="1dp"
+        android:layout_weight="1"
+        android:visibility="gone" />
 
-    <!-- Center: About / List / File Info -->
     <com.google.android.material.button.MaterialButton
         android:id="@+id/buttonAbout"
         style="@style/Widget.Material3.Button.OutlinedButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="center"
-        android:minHeight="48dp"
+        android:layout_marginEnd="4dp"
+        android:insetTop="0dp"
+        android:insetBottom="0dp"
+        android:minHeight="34dp"
         android:minWidth="0dp"
-        android:paddingStart="18dp"
-        android:paddingEnd="18dp"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
         android:text="@string/action_about"
         android:textAllCaps="false"
         android:textColor="@android:color/white"
-        android:textSize="17sp"
+        android:textSize="12sp"
         android:textStyle="bold"
         android:visibility="gone"
         app:backgroundTint="#00838F"
-        app:cornerRadius="8dp"
+        app:cornerRadius="6dp"
         app:strokeColor="@android:color/white"
         app:strokeWidth="1dp" />
 
-    <!-- Right: Exit -->
     <com.google.android.material.button.MaterialButton
         android:id="@+id/buttonExit"
         style="@style/Widget.Material3.Button.OutlinedButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="end|center_vertical"
-        android:minHeight="40dp"
+        android:insetTop="0dp"
+        android:insetBottom="0dp"
+        android:minHeight="34dp"
         android:minWidth="0dp"
-        android:paddingStart="12dp"
-        android:paddingEnd="12dp"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
         android:text="@string/action_exit"
         android:textAllCaps="false"
         android:textColor="@android:color/white"
-        android:textSize="14sp"
+        android:textSize="12sp"
         app:backgroundTint="#00838F"
-        app:cornerRadius="8dp"
+        app:cornerRadius="6dp"
         app:strokeColor="@android:color/white"
         app:strokeWidth="1dp" />
-</FrameLayout>
+</LinearLayout>

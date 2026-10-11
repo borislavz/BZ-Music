@@ -38,6 +38,26 @@ final class PlaybackControlsBinder {
         });
     }
 
+    /** Turns shuffle off in prefs and refreshes the Shuffle button label/state. */
+    static void turnShuffleOff(Activity activity) {
+        MaterialButton buttonShuffle = activity.findViewById(R.id.buttonShuffle);
+        PlaybackPrefs.setShuffleEnabled(activity, false);
+        if (buttonShuffle == null) {
+            return;
+        }
+        buttonShuffle.clearOnCheckedChangeListeners();
+        buttonShuffle.setChecked(false);
+        updateShuffleLabel(buttonShuffle);
+        buttonShuffle.addOnCheckedChangeListener((button, isChecked) -> {
+            PlaybackPrefs.setShuffleEnabled(activity, isChecked);
+            updateShuffleLabel(buttonShuffle);
+            MusicPlayer.get().onShuffleModeChanged();
+            if (activity instanceof PlayerActivity) {
+                ((PlayerActivity) activity).onQueueOrderChanged();
+            }
+        });
+    }
+
     private static void updateShuffleLabel(MaterialButton button) {
         button.setText(button.isChecked()
                 ? R.string.playback_shuffle_on
