@@ -19,3 +19,4 @@ gradle-truststore.jks
 release-artifacts/
 local-maven-repo/
 test-audio/
+gradle/wrapper/gradle-*-bin.zip
