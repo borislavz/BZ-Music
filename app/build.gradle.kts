@@ -18,8 +18,8 @@ android {
         applicationId = "com.borislav007.muzika"
         minSdk = 24
         targetSdk = 36
-        versionCode = 8
-        versionName = "1.0.8"
+        versionCode = 9
+        versionName = "1.0.9"
         ndk {
             // Common phone + emulator ABIs for LibVLC (WMA support).
             abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")

@@ -1,6 +1,9 @@
 package com.borislav007.muzika;
 
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.res.AssetFileDescriptor;
 import android.media.AudioAttributes;
 import android.media.AudioFocusRequest;
@@ -57,6 +60,7 @@ final class MusicPlayer {
     private AudioManager audioManager;
     private AudioFocusRequest audioFocusRequest;
     private boolean hasAudioFocus;
+    private boolean becomingNoisyRegistered;
 
     private final AudioManager.OnAudioFocusChangeListener audioFocusChangeListener =
             focusChange -> {
@@ -69,6 +73,18 @@ final class MusicPlayer {
                     notifyMediaSessionPlayPause();
                 }
             };
+
+    /** Pause when headset / Bluetooth A2DP disconnects so audio does not continue on speaker. */
+    private final BroadcastReceiver becomingNoisyReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (intent != null
+                    && AudioManager.ACTION_AUDIO_BECOMING_NOISY.equals(intent.getAction())
+                    && isPlaying()) {
+                pause();
+            }
+        }
+    };
 
     static synchronized MusicPlayer get() {
         if (instance == null) {
@@ -232,6 +248,31 @@ final class MusicPlayer {
         if (audioManager == null) {
             audioManager = (AudioManager) appContext.getSystemService(Context.AUDIO_SERVICE);
         }
+        ensureBecomingNoisyReceiver();
+    }
+
+    private void ensureBecomingNoisyReceiver() {
+        if (becomingNoisyRegistered || appContext == null) {
+            return;
+        }
+        IntentFilter filter = new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            appContext.registerReceiver(becomingNoisyReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            appContext.registerReceiver(becomingNoisyReceiver, filter);
+        }
+        becomingNoisyRegistered = true;
+    }
+
+    private void unregisterBecomingNoisyReceiver() {
+        if (!becomingNoisyRegistered || appContext == null) {
+            return;
+        }
+        try {
+            appContext.unregisterReceiver(becomingNoisyReceiver);
+        } catch (Exception ignored) {
+        }
+        becomingNoisyRegistered = false;
     }
 
     private boolean requestAudioFocus() {
@@ -762,6 +803,7 @@ final class MusicPlayer {
     void releaseAll() {
         releasePlayerOnly();
         abandonAudioFocus();
+        unregisterBecomingNoisyReceiver();
         if (mediaSession != null) {
             mediaSession.release();
             mediaSession = null;
