@@ -251,6 +251,7 @@ public class FolderBrowserActivity extends AppCompatActivity {
         Intent intent = new Intent(this, PlayerActivity.class);
         intent.putExtra(PlayerActivity.EXTRA_TRACK_URI, current.uri.toString());
         intent.putExtra(PlayerActivity.EXTRA_ALREADY_QUEUED, alreadyQueued);
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         startActivity(intent);
     }
 

@@ -117,6 +117,13 @@ final class MusicPlayer {
         return playQueue.size();
     }
 
+    /** True when a queue/track is already loaded (e.g. playing under the media notification). */
+    boolean hasRestorableSession() {
+        return currentTrack != null
+                && currentTrack.uri != null
+                && !playQueue.isEmpty();
+    }
+
     /** Jump to a track in the current queue and start playback. */
     void playAtQueueIndex(int index) {
         if (index < 0 || index >= playQueue.size()) {

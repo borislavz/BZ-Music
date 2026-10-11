@@ -2,6 +2,7 @@ package com.borislav007.muzika;
 
 import android.Manifest;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -182,10 +183,7 @@ public class PlayerActivity extends AppCompatActivity implements MusicPlayer.Lis
 
         PlayableTrack current = MusicPlayer.get().getCurrentTrack();
         if (alreadyQueued && current != null) {
-            showMetadata(current);
-            setPlayPauseUi(true);
-            updateTransportButtons();
-            refreshPlaylistUi(false);
+            bindExistingSession(current);
             return;
         }
 
@@ -205,6 +203,24 @@ public class PlayerActivity extends AppCompatActivity implements MusicPlayer.Lis
         setPlayPauseUi(true);
         updateTransportButtons();
         refreshPlaylistUi(false);
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        MusicPlayer.get().setListener(this);
+        PlayableTrack current = MusicPlayer.get().getCurrentTrack();
+        if (current != null) {
+            bindExistingSession(current);
+        }
+    }
+
+    private void bindExistingSession(PlayableTrack current) {
+        showMetadata(current);
+        setPlayPauseUi(true);
+        updateTransportButtons();
+        refreshPlaylistUi(showingPlaylist);
     }
 
     void onQueueOrderChanged() {

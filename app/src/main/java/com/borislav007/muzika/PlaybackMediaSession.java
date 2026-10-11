@@ -95,15 +95,25 @@ final class PlaybackMediaSession {
             }
         });
 
-        Intent sessionIntent = new Intent(appContext, PlayerActivity.class);
-        sessionIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        mediaSession.setSessionActivity(playerPendingIntent(0));
+        ensureChannel();
+    }
+
+    private PendingIntent playerPendingIntent(int requestCode) {
+        Intent open = new Intent(appContext, PlayerActivity.class);
+        open.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP
+                | Intent.FLAG_ACTIVITY_SINGLE_TOP
+                | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+        PlayableTrack current = MusicPlayer.get().getCurrentTrack();
+        if (current != null && current.uri != null) {
+            open.putExtra(PlayerActivity.EXTRA_TRACK_URI, current.uri.toString());
+        }
+        open.putExtra(PlayerActivity.EXTRA_ALREADY_QUEUED, true);
         int piFlags = PendingIntent.FLAG_UPDATE_CURRENT;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             piFlags |= PendingIntent.FLAG_IMMUTABLE;
         }
-        mediaSession.setSessionActivity(PendingIntent.getActivity(
-                appContext, 0, sessionIntent, piFlags));
-        ensureChannel();
+        return PendingIntent.getActivity(appContext, requestCode, open, piFlags);
     }
 
     MediaSession.Token getSessionToken() {
@@ -134,6 +144,7 @@ final class PlaybackMediaSession {
         }
         mediaSession.setMetadata(meta.build());
         mediaSession.setActive(true);
+        mediaSession.setSessionActivity(playerPendingIntent(0));
         publishPlaybackState();
         PlaybackService.start(appContext);
         startPositionUpdates();
@@ -197,13 +208,7 @@ final class PlaybackMediaSession {
                 ? track.artist.trim()
                 : appContext.getString(R.string.player_title);
 
-        Intent open = new Intent(appContext, PlayerActivity.class);
-        open.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        int piFlags = PendingIntent.FLAG_UPDATE_CURRENT;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            piFlags |= PendingIntent.FLAG_IMMUTABLE;
-        }
-        PendingIntent contentIntent = PendingIntent.getActivity(appContext, 1, open, piFlags);
+        PendingIntent contentIntent = playerPendingIntent(1);
 
         boolean playing = MusicPlayer.get().isPlaying();
         Notification.Builder builder;

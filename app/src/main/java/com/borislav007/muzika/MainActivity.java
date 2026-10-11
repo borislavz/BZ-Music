@@ -89,6 +89,21 @@ public class MainActivity extends AppCompatActivity {
         buttonPlayEverything.setOnClickListener(v -> startFolderPlayback());
         PlaybackControlsBinder.bind(this);
         ensureAccessThenBrowse();
+
+        // Safety net: if Main was opened while a session is already running (e.g. splash/launcher
+        // race), restore the player UI unless Start explicitly requested the folder browser.
+        if (savedInstanceState == null && shouldRestorePlayerUi()) {
+            openPlayer(true);
+        }
+    }
+
+    private boolean shouldRestorePlayerUi() {
+        if (!MusicPlayer.get().hasRestorableSession()) {
+            return false;
+        }
+        Intent intent = getIntent();
+        return intent == null
+                || !intent.getBooleanExtra(AppNavigation.EXTRA_OPEN_INITIAL, false);
     }
 
     @Override
@@ -291,6 +306,7 @@ public class MainActivity extends AppCompatActivity {
         Intent intent = new Intent(this, PlayerActivity.class);
         intent.putExtra(PlayerActivity.EXTRA_TRACK_URI, current.uri.toString());
         intent.putExtra(PlayerActivity.EXTRA_ALREADY_QUEUED, alreadyQueued);
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         startActivity(intent);
     }
 }
